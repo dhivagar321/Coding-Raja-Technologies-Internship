@@ -1,0 +1,82 @@
+# Import necessary libraries
+import os
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.layers import Dense, Flatten, Dropout
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
+
+# Define constants
+IMAGE_SIZE = (224, 224)
+BATCH_SIZE = 32
+NUM_CLASSES = 10
+EPOCHS = 10
+
+# Set directories for train and test data
+train_dir = 'path_to_train_data_directory'
+test_dir = 'path_to_test_data_directory'
+
+# Data preprocessing
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=20,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    fill_mode='nearest'
+)
+
+test_datagen = ImageDataGenerator(rescale=1./255)
+
+train_generator = train_datagen.flow_from_directory(
+    train_dir,
+    target_size=IMAGE_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='categorical'
+)
+
+test_generator = test_datagen.flow_from_directory(
+    test_dir,
+    target_size=IMAGE_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='categorical'
+)
+
+# Load pre-trained VGG16 model
+base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+
+# Freeze convolutional layers
+for layer in base_model.layers:
+    layer.trainable = False
+
+# Add custom classification layers
+x = base_model.output
+x = Flatten()(x)
+x = Dense(512, activation='relu')(x)
+x = Dropout(0.5)(x)
+predictions = Dense(NUM_CLASSES, activation='softmax')(x)
+
+# Compile the model
+model = Model(inputs=base_model.input, outputs=predictions)
+model.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Train the model
+history = model.fit(
+    train_generator,
+    steps_per_epoch=train_generator.samples // BATCH_SIZE,
+    epochs=EPOCHS,
+    validation_data=test_generator,
+    validation_steps=test_generator.samples // BATCH_SIZE
+)
+
+# Evaluate the model
+loss, accuracy = model.evaluate(test_generator)
+print("Test Loss:", loss)
+print("Test Accuracy:", accuracy)
+
+# Save the model
+model.save('food_classification_model.h5')
