@@ -1,0 +1,86 @@
+# Step 1: Data Collection
+# Assuming you have a CSV file with two columns: 'text' and 'sentiment'
+
+import pandas as pd
+
+# Load data
+data = pd.read_csv('social_media_data.csv')
+
+# Step 2: Text Preprocessing
+import re
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+
+# Remove special characters and lowercasing
+def preprocess_text(text):
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    text = text.lower()
+    return text
+
+# Tokenization and removing stopwords
+stop_words = set(stopwords.words('english'))
+def tokenize_text(text):
+    tokens = word_tokenize(text)
+    tokens = [word for word in tokens if word not in stop_words]
+    return tokens
+
+# Lemmatization
+lemmatizer = WordNetLemmatizer()
+def lemmatize_text(tokens):
+    lemmas = [lemmatizer.lemmatize(token) for token in tokens]
+    return lemmas
+
+# Apply preprocessing functions to text data
+data['clean_text'] = data['text'].apply(preprocess_text)
+data['tokens'] = data['clean_text'].apply(tokenize_text)
+data['lemmas'] = data['tokens'].apply(lemmatize_text)
+
+# Step 3: Feature Extraction
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# Convert text data into numerical features using TF-IDF
+tfidf_vectorizer = TfidfVectorizer(max_features=5000)
+X = tfidf_vectorizer.fit_transform(data['clean_text'])
+y = data['sentiment']
+
+# Step 4: Model Selection
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import MultinomialNB
+
+# Split data into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize and train Naive Bayes classifier
+clf = MultinomialNB()
+clf.fit(X_train, y_train)
+
+# Step 5: Model Evaluation
+from sklearn.metrics import accuracy_score, classification_report
+
+# Predictions
+y_pred = clf.predict(X_test)
+
+# Evaluate model
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+
+# Step 6: Deployment
+# For simplicity, let's assume a Flask app for deployment
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route('/predict', methods=['POST'])
+def predict_sentiment():
+    text = request.json['text']
+    cleaned_text = preprocess_text(text)
+    vectorized_text = tfidf_vectorizer.transform([cleaned_text])
+    prediction = clf.predict(vectorized_text)
+    sentiment = {0: 'Negative', 1: 'Neutral', 2: 'Positive'}[prediction[0]]
+    return jsonify({'sentiment': sentiment})
+
+if __name__ == '__main__':
+    app.run(debug=True)
